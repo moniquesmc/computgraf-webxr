@@ -1,42 +1,19 @@
-# 📦 Cubagem & Picking — WebXR
+# Cubagem & Picking — WebXR
 
-Sistema de Realidade Aumentada (WebXR) com **Three.js** para auxílio logístico.
+Sistema WebXR + Three.js para auxilio logistico com Realidade Aumentada.
 
-## 🚀 Como Executar
+## Funcionalidades
+- **Cubagem Virtual**: empilhe caixas em superficies reais via AR
+- **Picking Guiado**: cacamba de caminhao com validacao de espaco e empilhamento
+- **Regras de cor**: Vermelho (V>12000cm3), Verde (4000<V<12000), Azul (V<4000)
+- **Empilhamento**: mesma cor, azul sobre verde/vermelha, verde sobre vermelha
+- **Modo Simulacao**: desktop 3D interativo
 
-### GitHub Pages (recomendado)
-```bash
-git init && git add . && git commit -m "feat: cubagem webxr"
-git branch -M main
-git remote add origin https://github.com/SEU_USER/cubagem-webxr.git
-git push -u origin main
-```
-Settings → Pages → Branch: main → Save.
+## Tecnologias
+- Three.js, WebXR Device API, Hit Test API
+- Sem frameworks legados
 
-### Local + ngrok
-```bash
-npx http-server -p 8080
-npx ngrok http 8080
-```
-
-## 📐 Regras
-| Cor | Volume |
-|-----|--------|
-| 🔴 Vermelho | V > 12.000 cm³ |
-| 🟢 Verde | 4.000 < V ≤ 12.000 cm³ |
-| 🔵 Azul | V ≤ 4.000 cm³ |
-
-### Empilhamento
-✅ Mesma cor · ✅ Azul→Verde/Vermelha · ✅ Verde→Vermelha
-❌ Vermelha→Verde/Azul · ❌ Verde→Azul
-
-## 🖥️ Modo Simulação
-Para dispositivos sem AR: botão **"Modo Simulação"** abre a cena 3D interativa com OrbitControls.
-
-## 📁 Estrutura
-```
-├── index.html
-├── app.js
-├── style.css
-└── README.md
-```
+## Como Usar
+1. GitHub Pages: Settings > Pages > main > Save
+2. Celular: Chrome Android + ARCore
+3. Desktop: Modo Simulacao
