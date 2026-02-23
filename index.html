@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>Cubagem &amp; Picking — WebXR</title>
   <link rel="stylesheet" href="style.css" />
 </head>
@@ -37,7 +37,8 @@
         </div>
       </div>
 
-      <button id="start-ar">Iniciar AR</button>
+      <button id="start-ar" class="btn-primary">Iniciar AR</button>
+      <button id="start-sim" class="btn-secondary">💻 Modo Simulação</button>
       <p id="ar-status"></p>
     </div>
   </div>
@@ -62,6 +63,7 @@
 
   <div id="crosshair"></div>
   <div id="toast"></div>
+  <div id="sim-badge">🖥️ MODO SIMULAÇÃO</div>
 
   <!-- ===== LEGENDA ===== -->
   <div id="legend">
