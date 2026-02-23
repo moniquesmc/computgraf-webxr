@@ -1,49 +1,29 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>Cubagem &amp; Picking — WebXR</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
+  <title>Cubagem & Picking — WebXR</title>
+  <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-
-  <!-- ===== OVERLAY INICIAL ===== -->
   <div id="overlay">
     <div class="overlay-content">
       <div class="logo-icon">📦</div>
       <h1>Cubagem & Picking</h1>
-      <p class="subtitle">
-        Sistema de Realidade Aumentada para auxílio logístico.
-        Empilhe caixas virtuais e simule carregamento de caminhões.
-      </p>
-
+      <p class="subtitle">Sistema de Realidade Aumentada para auxílio logístico. Empilhe caixas virtuais e simule carregamento de caminhões.</p>
       <div class="features">
-        <div class="feature-card">
-          <div class="icon">📐</div>
-          <div class="label">Cubagem<br/>Virtual</div>
-        </div>
-        <div class="feature-card">
-          <div class="icon">🚛</div>
-          <div class="label">Picking<br/>Guiado</div>
-        </div>
-        <div class="feature-card">
-          <div class="icon">🎯</div>
-          <div class="label">Hit Test<br/>Superfícies</div>
-        </div>
-        <div class="feature-card">
-          <div class="icon">🧱</div>
-          <div class="label">Empilhamento<br/>Inteligente</div>
-        </div>
+        <div class="feature-card"><div class="icon">📐</div><div class="label">Cubagem<br/>Virtual</div></div>
+        <div class="feature-card"><div class="icon">🚛</div><div class="label">Picking<br/>Guiado</div></div>
+        <div class="feature-card"><div class="icon">🎯</div><div class="label">Hit Test<br/>Superfícies</div></div>
+        <div class="feature-card"><div class="icon">🧱</div><div class="label">Empilhamento<br/>Inteligente</div></div>
       </div>
-
       <button id="start-ar" class="btn-primary">Iniciar AR</button>
       <button id="start-sim" class="btn-secondary">💻 Modo Simulação</button>
       <p id="ar-status"></p>
     </div>
   </div>
 
-  <!-- ===== HUD ===== -->
   <div id="hud">
     <div id="hud-top">
       <div id="info-panel">
@@ -55,36 +35,41 @@
       <button id="mode-toggle">🔄 Cubagem</button>
     </div>
     <div id="hud-bottom">
-      <button class="hud-btn" id="btn-place">📦 Colocar</button>
-      <button class="hud-btn" id="btn-undo">↩ Desfazer</button>
-      <button class="hud-btn" id="btn-reset">✨ Resetar</button>
+      <div id="legend">
+        <div class="legend-item"><span class="legend-color" style="background:#e53935"></span> Vermelha (V > X)</div>
+        <div class="legend-item"><span class="legend-color" style="background:#43a047"></span> Verde (Y < V < X)</div>
+        <div class="legend-item"><span class="legend-color" style="background:#1e88e5"></span> Azul (V < Y)</div>
+        <div class="legend-divider">
+          <div class="legend-rule">🔽 Azul sobre Verde / Vermelha</div>
+          <div class="legend-rule">🔽 Verde sobre Vermelha</div>
+          <div class="legend-rule">🔽 Mesma cor sobre mesma cor</div>
+        </div>
+      </div>
+      <div id="btn-row">
+        <button class="hud-btn" id="btn-place">📦 Colocar</button>
+        <button class="hud-btn" id="btn-undo">↩ Desfazer</button>
+        <button class="hud-btn" id="btn-reset">✨ Resetar</button>
+      </div>
     </div>
   </div>
 
-  <div id="crosshair"></div>
+  <div id="crosshair">
+    <svg viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="22" cy="22" r="16" stroke="#ff69b4" stroke-width="2" stroke-dasharray="4 4" opacity="0.7"/>
+      <circle cx="22" cy="22" r="3" fill="#ff2d87"/>
+      <line x1="22" y1="2" x2="22" y2="12" stroke="#ff69b4" stroke-width="1.5" opacity="0.6"/>
+      <line x1="22" y1="32" x2="22" y2="42" stroke="#ff69b4" stroke-width="1.5" opacity="0.6"/>
+      <line x1="2" y1="22" x2="12" y2="22" stroke="#ff69b4" stroke-width="1.5" opacity="0.6"/>
+      <line x1="32" y1="22" x2="42" y2="22" stroke="#ff69b4" stroke-width="1.5" opacity="0.6"/>
+    </svg>
+  </div>
+
+  <div id="tap-hint">👆 Toque na tela para posicionar</div>
   <div id="toast"></div>
   <div id="sim-badge">🖥️ MODO SIMULAÇÃO</div>
 
-  <!-- ===== LEGENDA ===== -->
-  <div id="legend">
-    <div class="legend-item"><span class="legend-color" style="background:#e53935;"></span> Vermelha (V &gt; X)</div>
-    <div class="legend-item"><span class="legend-color" style="background:#43a047;"></span> Verde (Y &lt; V &lt; X)</div>
-    <div class="legend-item"><span class="legend-color" style="background:#1e88e5;"></span> Azul (V &lt; Y)</div>
-    <div class="legend-divider">
-      <div class="legend-rule">🔽 Azul sobre Verde / Vermelha</div>
-      <div class="legend-rule">🔽 Verde sobre Vermelha</div>
-      <div class="legend-rule">🔽 Mesma cor sobre mesma cor</div>
-    </div>
-  </div>
-
-  <!-- Three.js Import Map -->
   <script type="importmap">
-  {
-    "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
-    }
-  }
+  {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"}}
   </script>
   <script type="module" src="app.js"></script>
 </body>
