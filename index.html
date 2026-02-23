@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cubagem &amp; Picking — WebXR</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ===== OVERLAY INICIAL ===== -->
+  <div id="overlay">
+    <div class="overlay-content">
+      <div class="logo-icon">📦</div>
+      <h1>Cubagem & Picking</h1>
+      <p class="subtitle">
+        Sistema de Realidade Aumentada para auxílio logístico.
+        Empilhe caixas virtuais e simule carregamento de caminhões.
+      </p>
+
+      <div class="features">
+        <div class="feature-card">
+          <div class="icon">📐</div>
+          <div class="label">Cubagem<br/>Virtual</div>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🚛</div>
+          <div class="label">Picking<br/>Guiado</div>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🎯</div>
+          <div class="label">Hit Test<br/>Superfícies</div>
+        </div>
+        <div class="feature-card">
+          <div class="icon">🧱</div>
+          <div class="label">Empilhamento<br/>Inteligente</div>
+        </div>
+      </div>
+
+      <button id="start-ar">Iniciar AR</button>
+      <p id="ar-status"></p>
+    </div>
+  </div>
+
+  <!-- ===== HUD ===== -->
+  <div id="hud">
+    <div id="hud-top">
+      <div id="info-panel">
+        <span id="hud-mode">Modo: <b>Cubagem</b></span>
+        <span id="hud-count">Caixas: <b>0</b></span>
+        <span id="hud-next">Próxima: <b>—</b></span>
+        <span id="hud-vol">Volume: <b>—</b></span>
+      </div>
+      <button id="mode-toggle">🔄 Cubagem</button>
+    </div>
+    <div id="hud-bottom">
+      <button class="hud-btn" id="btn-place">📦 Colocar</button>
+      <button class="hud-btn" id="btn-undo">↩ Desfazer</button>
+      <button class="hud-btn" id="btn-reset">✨ Resetar</button>
+    </div>
+  </div>
+
+  <div id="crosshair"></div>
+  <div id="toast"></div>
+
+  <!-- ===== LEGENDA ===== -->
+  <div id="legend">
+    <div class="legend-item"><span class="legend-color" style="background:#e53935;"></span> Vermelha (V &gt; X)</div>
+    <div class="legend-item"><span class="legend-color" style="background:#43a047;"></span> Verde (Y &lt; V &lt; X)</div>
+    <div class="legend-item"><span class="legend-color" style="background:#1e88e5;"></span> Azul (V &lt; Y)</div>
+    <div class="legend-divider">
+      <div class="legend-rule">🔽 Azul sobre Verde / Vermelha</div>
+      <div class="legend-rule">🔽 Verde sobre Vermelha</div>
+      <div class="legend-rule">🔽 Mesma cor sobre mesma cor</div>
+    </div>
+  </div>
+
+  <!-- Three.js Import Map -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
