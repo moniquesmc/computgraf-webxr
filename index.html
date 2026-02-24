@@ -4,7 +4,64 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no"/>
   <title>Cubagem & Picking — WebXR</title>
-  <link rel="stylesheet" href="style.css"/>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;900&display=swap');
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Poppins',sans-serif;overflow:hidden;background:#0a0a0a;color:#fff;touch-action:none}
+    canvas{display:block;position:fixed;top:0;left:0;width:100%;height:100%;z-index:0}
+
+    #overlay{position:fixed;inset:0;z-index:100;background:linear-gradient(135deg,#1a0a12 0%,#0d0d2b 50%,#1a0a12 100%);display:flex;align-items:center;justify-content:center;transition:opacity .6s,visibility .6s}
+    #overlay.hidden{opacity:0;visibility:hidden;pointer-events:none}
+    .overlay-content{text-align:center;padding:24px;max-width:420px}
+    .logo-icon{font-size:64px;margin-bottom:12px;filter:drop-shadow(0 0 20px #ff69b4)}
+    .overlay-content h1{font-size:28px;font-weight:900;background:linear-gradient(90deg,#ff69b4,#ff2d87);-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin-bottom:8px}
+    .subtitle{font-size:13px;color:#bbb;margin-bottom:24px;line-height:1.5}
+    .features{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:28px}
+    .feature-card{background:rgba(255,105,180,.08);border:1px solid rgba(255,105,180,.2);border-radius:14px;padding:16px 8px;text-align:center;transition:transform .2s}
+    .feature-card:active{transform:scale(.96)}
+    .feature-card .icon{font-size:28px;margin-bottom:6px}
+    .feature-card .label{font-size:11px;font-weight:600;color:#ddd;line-height:1.4}
+    .btn-primary{width:100%;padding:16px;border:none;border-radius:16px;font-family:inherit;font-size:17px;font-weight:700;color:#fff;background:linear-gradient(135deg,#ff2d87,#ff69b4);cursor:pointer;box-shadow:0 4px 24px rgba(255,45,135,.4);transition:transform .15s}
+    .btn-primary:active{transform:scale(.97)}
+    .btn-primary:disabled{opacity:.4;cursor:default}
+    .btn-secondary{width:100%;padding:14px;border:2px solid rgba(255,105,180,.3);border-radius:16px;font-family:inherit;font-size:15px;font-weight:600;color:#ff69b4;background:transparent;cursor:pointer;margin-top:12px;transition:transform .15s}
+    .btn-secondary:active{transform:scale(.97)}
+    #ar-status{font-size:11px;color:#f44;margin-top:12px;min-height:16px}
+
+    #hud{position:fixed;top:0;left:0;right:0;z-index:50;pointer-events:none;opacity:0;transition:opacity .4s}
+    #hud.active{opacity:1}
+    #hud-top{display:flex;justify-content:space-between;align-items:flex-start;padding:12px 14px 0}
+    #info-panel{background:rgba(26,10,18,.85);backdrop-filter:blur(12px);border:1px solid rgba(255,105,180,.25);border-radius:14px;padding:10px 16px;display:flex;flex-direction:column;gap:2px;pointer-events:auto}
+    #info-panel span{font-size:11px;color:#ddd}
+    #info-panel b{color:#ff69b4}
+    #mode-toggle{pointer-events:auto;background:linear-gradient(135deg,#ff2d87,#ff69b4);border:none;color:#fff;font-family:inherit;font-size:13px;font-weight:700;padding:10px 18px;border-radius:12px;cursor:pointer;box-shadow:0 2px 12px rgba(255,45,135,.35)}
+
+    #hud-bottom{position:fixed;bottom:0;left:0;right:0;padding:0 14px 18px;pointer-events:none;z-index:50}
+    #legend{background:rgba(26,10,18,.82);backdrop-filter:blur(10px);border:1px solid rgba(255,105,180,.2);border-radius:14px;padding:10px 14px;margin-bottom:10px;opacity:0;transition:opacity .4s;pointer-events:auto}
+    #legend.active{opacity:1}
+    .legend-item{font-size:11px;display:flex;align-items:center;gap:6px;margin-bottom:3px;color:#ddd}
+    .legend-color{width:12px;height:12px;border-radius:3px;display:inline-block}
+    .legend-divider{border-top:1px solid rgba(255,105,180,.15);margin-top:6px;padding-top:6px}
+    .legend-rule{font-size:10px;color:#bbb;margin-bottom:2px}
+    #btn-row{display:flex;gap:10px;pointer-events:auto}
+    .hud-btn{flex:1;padding:14px 0;border:none;border-radius:14px;font-family:inherit;font-size:14px;font-weight:700;color:#fff;cursor:pointer;transition:transform .12s;box-shadow:0 2px 10px rgba(0,0,0,.3)}
+    .hud-btn:active{transform:scale(.95)}
+    #btn-place{background:linear-gradient(135deg,#ff2d87,#ff69b4)}
+    #btn-undo{background:linear-gradient(135deg,#7c3aed,#a855f7)}
+    #btn-reset{background:linear-gradient(135deg,#e53935,#ff5252)}
+
+    #crosshair{position:fixed;top:50%;left:50%;width:44px;height:44px;transform:translate(-50%,-50%);z-index:40;opacity:0;transition:opacity .4s;pointer-events:none}
+    #crosshair.active{opacity:1}
+    #crosshair svg{width:100%;height:100%}
+
+    #tap-hint{position:fixed;bottom:140px;left:50%;transform:translateX(-50%);background:rgba(255,45,135,.9);color:#fff;padding:8px 20px;border-radius:20px;font-size:13px;font-weight:600;opacity:0;transition:opacity .3s;pointer-events:none;z-index:55;white-space:nowrap}
+    #tap-hint.active{opacity:1}
+    #toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) scale(.9);background:rgba(220,30,80,.95);color:#fff;padding:12px 28px;border-radius:16px;font-size:14px;font-weight:700;z-index:200;opacity:0;transition:opacity .25s,transform .25s;pointer-events:none;text-align:center;max-width:85vw}
+    #toast.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+    #toast.success{background:rgba(40,167,69,.95)}
+    #sim-badge{position:fixed;top:14px;left:50%;transform:translateX(-50%);background:rgba(124,58,237,.9);color:#fff;font-size:11px;font-weight:700;padding:5px 14px;border-radius:10px;z-index:55;opacity:0;transition:opacity .3s;pointer-events:none}
+    #sim-badge.active{opacity:1}
+  </style>
 </head>
 <body>
   <div id="overlay">
