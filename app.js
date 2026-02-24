@@ -1,24 +1,18 @@
 // ================================================================
-//  Cubagem & Picking WebXR — v6 FINAL (conforme enunciado)
-//  ✅ Three.js + WebXR Device API (sem soluções legadas)
-//  ✅ Hit Testing real de superfícies
-//  ✅ Cor definida PELO VOLUME da caixa (V>X=vermelho, Y<V<X=verde, V<Y=azul)
-//  ✅ Regras de empilhamento por cor
-//  ✅ Destaque visual quando empilhamento é impossível
-//  ✅ Módulo Cubagem + Módulo Picking com caçamba
+//  Cubagem & Picking WebXR — v7 FINAL
+//  ✅ AR com hit-test robusto + fallback sem hit-test
+//  ✅ Cor definida PELO VOLUME
+//  ✅ Regras de empilhamento
+//  ✅ Destaque visual quando impossível
+//  ✅ Caçamba posiciona mesmo sem hit-test
 // ================================================================
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-// ---- Thresholds de volume (m³) calibrados para ~33% cada cor ----
-// X = 0.032 m³ (32.000 cm³)   Y = 0.012 m³ (12.000 cm³)
-// Vermelho: V > 0.032    Verde: 0.012 < V ≤ 0.032    Azul: V ≤ 0.012
+// ---- Thresholds de volume (m³) ----
 const TX = 0.032;
 const TY = 0.012;
-
 const CMAP = { red: 0xe53935, green: 0x43a047, blue: 0x1e88e5 };
-
-// Caçamba do caminhão (Picking)
 const TRUCK = { w: 4.8, h: 3.0, d: 12.0 };
 
 // ---- State ----
@@ -30,16 +24,17 @@ let reticleOk = false;
 let xrSession = null;
 let htSource = null;
 let truckPlaced = false;
+let arRefSpace = null;
+let lastHitPose = null;
 
-// ---- Seleção & Movimento ----
+// ---- Seleção ----
 let selectedBox = null;
 const moveSpeed = 0.05;
 const keysDown = {};
 
-// ---- DOM ----
 const $ = id => document.getElementById(id);
 
-// ---- Three.js Setup ----
+// ---- Three.js ----
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.01, 120);
 camera.position.set(0, 6, 14);
@@ -53,7 +48,7 @@ renderer.toneMappingExposure = 1.2;
 document.body.appendChild(renderer.domElement);
 let controls = null;
 
-// Iluminação
+// Lights
 scene.add(new THREE.AmbientLight(0xffc0cb, 0.8));
 const dl = new THREE.DirectionalLight(0xffffff, 1.8);
 dl.position.set(6, 10, 6); scene.add(dl);
@@ -62,7 +57,7 @@ dl2.position.set(-4, 8, -4); scene.add(dl2);
 const pl = new THREE.PointLight(0xff69b4, 0.7, 20);
 pl.position.set(0, 5, 0); scene.add(pl);
 
-// Reticle (marcador AR)
+// Reticle
 const reticle = new THREE.Mesh(
   new THREE.RingGeometry(0.12, 0.18, 40).rotateX(-Math.PI / 2),
   new THREE.MeshBasicMaterial({ color: 0xff69b4, side: THREE.DoubleSide, transparent: true, opacity: 0.85 })
@@ -71,12 +66,12 @@ reticle.visible = false;
 reticle.matrixAutoUpdate = false;
 scene.add(reticle);
 
-// Preview (fantasma da próxima caixa)
+// Preview
 let preview = mkBox(next, true);
 preview.visible = false;
 scene.add(preview);
 
-// Grupo da caçamba
+// Truck
 const truckGrp = new THREE.Group();
 truckGrp.visible = false;
 scene.add(truckGrp);
@@ -86,50 +81,36 @@ let simFloor = null;
 let selOutline = null;
 
 // ================================================================
-//  GERAÇÃO DE CAIXA — Dimensões aleatórias, COR PELO VOLUME
+//  BOX — COR PELO VOLUME
 // ================================================================
 function genBox() {
-  // Ranges calibrados para distribuição equilibrada das 3 cores
-  const w = +(Math.random() * 0.55 + 0.05).toFixed(2);   // 0.05 a 0.60 m
-  const h = +(Math.random() * 0.45 + 0.05).toFixed(2);   // 0.05 a 0.50 m
-  const d = +(Math.random() * 0.55 + 0.05).toFixed(2);   // 0.05 a 0.60 m
+  const w = +(Math.random() * 0.55 + 0.05).toFixed(2);
+  const h = +(Math.random() * 0.45 + 0.05).toFixed(2);
+  const d = +(Math.random() * 0.55 + 0.05).toFixed(2);
   const v = w * h * d;
-
-  // COR DEFINIDA PELO VOLUME (conforme enunciado)
-  // Vermelho: V > X (TX)
-  // Verde:    Y < V ≤ X (TY < V ≤ TX)
-  // Azul:     V ≤ Y (TY)
   let color;
   if (v > TX) color = 'red';
   else if (v > TY) color = 'green';
   else color = 'blue';
-
   return { w, h, d, v, color };
 }
 
 function mkBox(b, ghost = false) {
   const geo = new THREE.BoxGeometry(b.w, b.h, b.d);
   const mat = new THREE.MeshStandardMaterial({
-    color: CMAP[b.color],
-    transparent: true,
-    opacity: ghost ? 0.35 : 0.92,
-    roughness: 0.35,
-    metalness: 0.08,
+    color: CMAP[b.color], transparent: true,
+    opacity: ghost ? 0.35 : 0.92, roughness: 0.35, metalness: 0.08,
   });
   const m = new THREE.Mesh(geo, mat);
   m.add(new THREE.LineSegments(
     new THREE.EdgesGeometry(geo),
-    new THREE.LineBasicMaterial({ color: ghost ? 0xff69b4 : 0x220011, linewidth: 1 })
+    new THREE.LineBasicMaterial({ color: ghost ? 0xff69b4 : 0x220011 })
   ));
   return m;
 }
 
 // ================================================================
-//  REGRAS DE EMPILHAMENTO (conforme enunciado)
-//  - Mesma cor sobre mesma cor: ✅
-//  - Azul sobre Verde ou Vermelha: ✅
-//  - Verde sobre Vermelha: ✅
-//  - Qualquer outra combinação: ❌
+//  STACKING
 // ================================================================
 function canStack(topColor, botColor) {
   if (topColor === botColor) return true;
@@ -140,10 +121,9 @@ function canStack(topColor, botColor) {
 
 function findTop(x, z, list) {
   let best = null, by = 0;
-  const threshold = 0.22;
   for (const b of list) {
     const p = b.mesh.position;
-    if (Math.abs(p.x - x) < threshold && Math.abs(p.z - z) < threshold) {
+    if (Math.abs(p.x - x) < 0.22 && Math.abs(p.z - z) < 0.22) {
       const t = p.y + b.h / 2;
       if (t > by) { by = t; best = b; }
     }
@@ -152,7 +132,7 @@ function findTop(x, z, list) {
 }
 
 // ================================================================
-//  CAÇAMBA DO CAMINHÃO (Módulo Picking)
+//  TRUCK
 // ================================================================
 function buildTruck() {
   const { w: tw, h: th, d: td } = TRUCK;
@@ -163,106 +143,66 @@ function buildTruck() {
     side: THREE.DoubleSide, roughness: 0.85, depthWrite: false
   });
 
-  // Chão sólido
   const floorMat = new THREE.MeshStandardMaterial({
     color: 0xff2d87, transparent: true, opacity: 0.4,
     side: THREE.DoubleSide, roughness: 0.9
   });
   const floor = new THREE.Mesh(new THREE.BoxGeometry(tw, wt, td), floorMat);
-  floor.position.y = 0;
   truckGrp.add(floor);
 
-  // Paredes
   const wl = new THREE.Mesh(new THREE.BoxGeometry(wt, th, td), wallMat());
-  wl.position.set(-tw / 2, th / 2, 0); truckGrp.add(wl);
-
+  wl.position.set(-tw/2, th/2, 0); truckGrp.add(wl);
   const wr = new THREE.Mesh(new THREE.BoxGeometry(wt, th, td), wallMat());
-  wr.position.set(tw / 2, th / 2, 0); truckGrp.add(wr);
-
+  wr.position.set(tw/2, th/2, 0); truckGrp.add(wr);
   const wb = new THREE.Mesh(new THREE.BoxGeometry(tw, th, wt), wallMat());
-  wb.position.set(0, th / 2, -td / 2); truckGrp.add(wb);
-
-  // Frontal (aberta)
+  wb.position.set(0, th/2, -td/2); truckGrp.add(wb);
   const wf = new THREE.Mesh(new THREE.BoxGeometry(tw, th, wt), wallMat());
   wf.material.opacity = 0.05;
-  wf.position.set(0, th / 2, td / 2); truckGrp.add(wf);
+  wf.position.set(0, th/2, td/2); truckGrp.add(wf);
 
-  // Wireframe principal
-  const edgesBox = new THREE.BoxGeometry(tw, th, td);
-  const edges = new THREE.EdgesGeometry(edgesBox);
-  const edgeLine = new THREE.LineSegments(edges,
-    new THREE.LineBasicMaterial({ color: 0xff2d87, linewidth: 2 })
-  );
-  edgeLine.position.set(0, th / 2, 0);
-  truckGrp.add(edgeLine);
+  const edges = new THREE.EdgesGeometry(new THREE.BoxGeometry(tw, th, td));
+  const edgeLine = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xff2d87, linewidth: 2 }));
+  edgeLine.position.set(0, th/2, 0); truckGrp.add(edgeLine);
 
-  // Glow wireframe
-  const edgesGlow = new THREE.EdgesGeometry(new THREE.BoxGeometry(tw + 0.03, th + 0.03, td + 0.03));
-  const glowLine = new THREE.LineSegments(edgesGlow,
-    new THREE.LineBasicMaterial({ color: 0xff69b4, transparent: true, opacity: 0.35 })
-  );
-  glowLine.position.set(0, th / 2, 0);
-  truckGrp.add(glowLine);
+  const edgesGlow = new THREE.EdgesGeometry(new THREE.BoxGeometry(tw+0.03, th+0.03, td+0.03));
+  const glowLine = new THREE.LineSegments(edgesGlow, new THREE.LineBasicMaterial({ color: 0xff69b4, transparent: true, opacity: 0.35 }));
+  glowLine.position.set(0, th/2, 0); truckGrp.add(glowLine);
 
-  // Grid no chão
   const g = new THREE.GridHelper(Math.max(tw, td), 20, 0xff69b4, 0x4a1042);
-  g.position.y = 0.04;
-  g.material.transparent = true;
-  g.material.opacity = 0.35;
+  g.position.y = 0.04; g.material.transparent = true; g.material.opacity = 0.35;
   truckGrp.add(g);
 
-  // Marcadores de cantos
   const cornerGeo = new THREE.SphereGeometry(0.06, 12, 12);
   const cornerMat = new THREE.MeshBasicMaterial({ color: 0xff2d87 });
-  [
-    [-tw/2, 0, -td/2], [tw/2, 0, -td/2], [-tw/2, 0, td/2], [tw/2, 0, td/2],
-    [-tw/2, th, -td/2], [tw/2, th, -td/2], [-tw/2, th, td/2], [tw/2, th, td/2],
-  ].forEach(c => {
+  [[-tw/2,0,-td/2],[tw/2,0,-td/2],[-tw/2,0,td/2],[tw/2,0,td/2],
+   [-tw/2,th,-td/2],[tw/2,th,-td/2],[-tw/2,th,td/2],[tw/2,th,td/2]].forEach(c => {
     const s = new THREE.Mesh(cornerGeo, cornerMat);
-    s.position.set(c[0], c[1], c[2]);
-    truckGrp.add(s);
+    s.position.set(c[0],c[1],c[2]); truckGrp.add(s);
   });
 
-  // Label CAÇAMBA
+  // Label
   const canvas = document.createElement('canvas');
   canvas.width = 1024; canvas.height = 192;
   const ctx = canvas.getContext('2d');
-  ctx.clearRect(0, 0, 1024, 192);
+  ctx.clearRect(0,0,1024,192);
   ctx.font = 'bold 80px Poppins, sans-serif';
-  ctx.fillStyle = '#ff2d87';
-  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ff2d87'; ctx.textAlign = 'center';
   ctx.fillText('CAÇAMBA', 512, 120);
   const tex = new THREE.CanvasTexture(canvas);
-  const labelMat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, depthWrite: false });
-  const labelMesh = new THREE.Mesh(new THREE.PlaneGeometry(4, 0.8), labelMat);
-  labelMesh.position.set(0, th + 0.6, 0);
+  const labelMesh = new THREE.Mesh(new THREE.PlaneGeometry(4, 0.8),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, side: THREE.DoubleSide, depthWrite: false }));
+  labelMesh.position.set(0, th+0.6, 0);
   labelMesh.rotation.x = -Math.PI * 0.12;
   truckGrp.add(labelMesh);
-
-  // Label dimensões
-  const canvas2 = document.createElement('canvas');
-  canvas2.width = 1024; canvas2.height = 128;
-  const ctx2 = canvas2.getContext('2d');
-  ctx2.clearRect(0, 0, 1024, 128);
-  ctx2.font = '500 44px Poppins, sans-serif';
-  ctx2.fillStyle = '#ff69b4';
-  ctx2.textAlign = 'center';
-  ctx2.fillText(tw.toFixed(1) + 'm x ' + th.toFixed(1) + 'm x ' + td.toFixed(1) + 'm', 512, 80);
-  const tex2 = new THREE.CanvasTexture(canvas2);
-  const dimMat = new THREE.MeshBasicMaterial({ map: tex2, transparent: true, side: THREE.DoubleSide, depthWrite: false });
-  const dimMesh = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 0.5), dimMat);
-  dimMesh.position.set(0, th + 0.15, 0);
-  dimMesh.rotation.x = -Math.PI * 0.12;
-  truckGrp.add(dimMesh);
 }
 
 function insideTruck(p, b) {
-  const hw = TRUCK.w / 2, hd = TRUCK.d / 2;
-  return !(p.x - b.w/2 < -hw || p.x + b.w/2 > hw || p.z - b.d/2 < -hd || p.z + b.d/2 > hd || p.y + b.h/2 > TRUCK.h);
+  const hw = TRUCK.w/2, hd = TRUCK.d/2;
+  return !(p.x-b.w/2 < -hw || p.x+b.w/2 > hw || p.z-b.d/2 < -hd || p.z+b.d/2 > hd || p.y+b.h/2 > TRUCK.h);
 }
 
 // ================================================================
-//  UI — Toast, HUD, Preview
+//  UI
 // ================================================================
 let tt;
 function toast(msg, ms = 2500, ok = false) {
@@ -275,20 +215,10 @@ function updHUD() {
   const mn = mode === 'cubagem' ? 'Cubagem' : 'Picking';
   $('hud-mode').innerHTML = 'Modo: <b>' + mn + '</b>';
   $('hud-count').innerHTML = 'Caixas: <b>' + boxes.length + '</b>';
-
-  const colorNames = { red: '🔴 Vermelha', green: '🟢 Verde', blue: '🔵 Azul' };
-  $('hud-next').innerHTML = 'Próxima: <b>' + colorNames[next.color] + '</b>';
-  $('hud-vol').innerHTML = 'Vol: <b>' + (next.v * 1e6).toFixed(0) + ' cm³</b> (' + next.w.toFixed(2) + 'x' + next.h.toFixed(2) + 'x' + next.d.toFixed(2) + 'm)';
+  const cn = { red: '🔴 Vermelha', green: '🟢 Verde', blue: '🔵 Azul' };
+  $('hud-next').innerHTML = 'Próxima: <b>' + cn[next.color] + '</b>';
+  $('hud-vol').innerHTML = 'Vol: <b>' + (next.v*1e6).toFixed(0) + ' cm³</b> (' + next.w.toFixed(2) + 'x' + next.h.toFixed(2) + 'x' + next.d.toFixed(2) + 'm)';
   $('mode-toggle').textContent = '🔄 ' + mn;
-
-  // Info de seleção
-  if (selectedBox) {
-    const sc = { red: '🔴', green: '🟢', blue: '🔵' }[selectedBox.color];
-    $('sel-info').textContent = '📦 Selecionada: ' + sc + ' | WASD/Setas mover | Q/E sobe/desce | ESC deseleciona';
-    $('sel-info').style.display = 'block';
-  } else {
-    $('sel-info').style.display = 'none';
-  }
 }
 
 function refreshPreview() {
@@ -297,149 +227,60 @@ function refreshPreview() {
 }
 
 // ================================================================
-//  DESTAQUE VISUAL — preview fica vermelho pulsante se não pode empilhar
-//  (Requisito B: "destacar quando não for possível empilhar a caixa")
+//  DESTAQUE VISUAL — preview vermelho pulsante se impossível
 // ================================================================
-function updatePreviewFeedback(previewPos) {
+function updatePreviewFeedback(pos) {
   if (!preview.visible) return;
-
   let blocked = false;
 
   if (mode === 'picking') {
-    // Checar se está dentro da caçamba
-    const lp = isSim ? previewPos.clone() : truckGrp.worldToLocal(previewPos.clone());
-    if (!insideTruck(lp, next)) {
-      blocked = true;
-    } else {
+    const lp = isSim ? pos.clone() : truckGrp.worldToLocal(pos.clone());
+    if (!insideTruck(lp, next)) blocked = true;
+    else {
       const st = findTop(lp.x, lp.z, boxes);
-      if (st && !canStack(next.color, st.color)) {
-        blocked = true;
-      }
+      if (st && !canStack(next.color, st.color)) blocked = true;
     }
   } else {
-    // Cubagem — checar empilhamento
-    const st = findTop(previewPos.x, previewPos.z, boxes);
-    if (st && !canStack(next.color, st.color)) {
-      blocked = true;
-    }
+    const st = findTop(pos.x, pos.z, boxes);
+    if (st && !canStack(next.color, st.color)) blocked = true;
   }
 
-  // Atualizar visual do preview
   if (blocked) {
-    // DESTAQUE VERMELHO pulsante — empilhamento impossível
-    const pulse = 0.5 + 0.3 * Math.sin(Date.now() * 0.008);
+    const pulse = 0.4 + 0.35 * Math.sin(Date.now() * 0.008);
     preview.material.color.set(0xff0000);
     preview.material.opacity = pulse;
-    // Atualizar edges para vermelho
-    preview.children.forEach(c => {
-      if (c.isLineSegments) c.material.color.set(0xff0000);
-    });
+    preview.children.forEach(c => { if (c.isLineSegments) c.material.color.set(0xff0000); });
   } else {
-    // Normal — cor correta da caixa
     preview.material.color.set(CMAP[next.color]);
     preview.material.opacity = 0.35;
-    preview.children.forEach(c => {
-      if (c.isLineSegments) c.material.color.set(0xff69b4);
-    });
+    preview.children.forEach(c => { if (c.isLineSegments) c.material.color.set(0xff69b4); });
   }
 }
 
 // ================================================================
-//  SELEÇÃO DE CAIXAS (clique + teclado para mover)
+//  POSIÇÃO AR — com fallback robusto
 // ================================================================
-function selectBox(event) {
-  if (!isSim) return;
-
-  const mouse = new THREE.Vector2();
-  mouse.x = (event.clientX / innerWidth) * 2 - 1;
-  mouse.y = -(event.clientY / innerHeight) * 2 + 1;
-
-  const rc = new THREE.Raycaster();
-  rc.setFromCamera(mouse, camera);
-
-  const meshes = boxes.map(b => b.mesh);
-  const hits = rc.intersectObjects(meshes, false);
-
-  clearSelection();
-
-  if (hits.length > 0) {
-    const hitMesh = hits[0].object;
-    const box = boxes.find(b => b.mesh === hitMesh);
-    if (box) {
-      selectedBox = box;
-      const outGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(box.w + 0.04, box.h + 0.04, box.d + 0.04));
-      selOutline = new THREE.LineSegments(outGeo, new THREE.LineBasicMaterial({ color: 0xffff00, linewidth: 2 }));
-      box.mesh.add(selOutline);
-      toast('📦 Caixa selecionada! WASD/Setas/Q/E para mover.', 2000, true);
-      updHUD();
-    }
-  } else {
-    updHUD();
+function getARPosition() {
+  // Se temos hit-test result, usar
+  if (lastHitPose) {
+    const pos = new THREE.Vector3();
+    const m = new THREE.Matrix4().fromArray(lastHitPose.transform.matrix);
+    pos.setFromMatrixPosition(m);
+    return pos;
   }
+
+  // FALLBACK: posicionar 2m na frente da câmera, no nível y=0
+  const cam = renderer.xr.getCamera();
+  const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
+  const pos = cam.position.clone().add(dir.multiplyScalar(2));
+  pos.y = 0; // nível do chão
+  return pos;
 }
-
-function clearSelection() {
-  if (selOutline && selectedBox) {
-    selectedBox.mesh.remove(selOutline);
-    selOutline.geometry.dispose();
-    selOutline.material.dispose();
-    selOutline = null;
-  }
-  selectedBox = null;
-}
-
-function moveSelectedBox() {
-  if (!selectedBox) return;
-
-  const m = selectedBox.mesh;
-  let dx = 0, dz = 0, dy = 0;
-
-  if (keysDown['KeyA'] || keysDown['ArrowLeft']) dx -= moveSpeed;
-  if (keysDown['KeyD'] || keysDown['ArrowRight']) dx += moveSpeed;
-  if (keysDown['KeyW'] || keysDown['ArrowUp']) dz -= moveSpeed;
-  if (keysDown['KeyS'] || keysDown['ArrowDown']) dz += moveSpeed;
-  if (keysDown['KeyQ']) dy += moveSpeed;
-  if (keysDown['KeyE']) dy -= moveSpeed;
-
-  if (dx !== 0 || dz !== 0 || dy !== 0) {
-    m.position.x += dx;
-    m.position.y += dy;
-    m.position.z += dz;
-
-    // Não descer abaixo do chão
-    if (m.position.y < selectedBox.h / 2) {
-      m.position.y = selectedBox.h / 2;
-    }
-
-    // Limites da caçamba no modo picking
-    if (mode === 'picking') {
-      const hw = TRUCK.w / 2, hd = TRUCK.d / 2;
-      m.position.x = Math.max(-hw + selectedBox.w/2, Math.min(hw - selectedBox.w/2, m.position.x));
-      m.position.z = Math.max(-hd + selectedBox.d/2, Math.min(hd - selectedBox.d/2, m.position.z));
-      if (m.position.y + selectedBox.h/2 > TRUCK.h) m.position.y = TRUCK.h - selectedBox.h/2;
-    }
-  }
-}
-
-// Eventos de teclado
-window.addEventListener('keydown', (e) => {
-  keysDown[e.code] = true;
-  if (e.code === 'Escape') { clearSelection(); updHUD(); }
-});
-window.addEventListener('keyup', (e) => { keysDown[e.code] = false; });
-
-// Clique para selecionar
-window.addEventListener('pointerdown', (e) => {
-  if (e.target.closest('#hud') || e.target.closest('#overlay') || e.target.closest('#legend')) return;
-  selectBox(e);
-});
 
 // ================================================================
-//  COLOCAR CAIXA
+//  PLACE BOX
 // ================================================================
 function placeBox() {
-  if (!isSim && !reticleOk) { toast('📍 Aponte para uma superfície!'); return; }
-
   const pos = new THREE.Vector3();
 
   if (isSim) {
@@ -448,24 +289,23 @@ function placeBox() {
     if (mode === 'picking') {
       const h = rc.intersectObjects(truckGrp.children, true);
       if (h.length) pos.copy(truckGrp.worldToLocal(h[0].point.clone()));
-      else pos.set((Math.random() - .5) * (TRUCK.w * 0.6), 0, (Math.random() - .5) * (TRUCK.d * 0.6));
+      else pos.set((Math.random()-.5)*(TRUCK.w*0.6), 0, (Math.random()-.5)*(TRUCK.d*0.6));
     } else {
       const h = rc.intersectObject(simFloor);
       if (h.length) pos.copy(h[0].point);
-      else pos.set((Math.random() - .5) * 3, 0, (Math.random() - .5) * 3);
+      else pos.set((Math.random()-.5)*3, 0, (Math.random()-.5)*3);
     }
   } else {
-    const q = new THREE.Quaternion(), s = new THREE.Vector3();
-    reticle.matrix.decompose(pos, q, s);
+    // AR — usar hit-test ou fallback
+    const arPos = getARPosition();
+    pos.copy(arPos);
   }
 
-  // === MÓDULO PICKING (B) ===
+  // === PICKING ===
   if (mode === 'picking') {
-    // AR: posicionar caçamba na primeira vez
     if (!isSim && !truckPlaced) {
-      const tPos = pos.clone();
-      tPos.z -= TRUCK.d / 2 + 0.5;
-      truckGrp.position.copy(tPos);
+      // Posicionar caçamba na frente do usuário
+      truckGrp.position.copy(pos);
       truckGrp.visible = true;
       truckPlaced = true;
       toast('🚛 Caçamba posicionada! Agora coloque as caixas dentro.', 3000, true);
@@ -480,19 +320,17 @@ function placeBox() {
         toast('❌ ' + next.color.toUpperCase() + ' não empilha sobre ' + st.color.toUpperCase() + '!');
         return;
       }
-      lp.y = st.mesh.position.y + st.h / 2 + next.h / 2;
+      lp.y = st.mesh.position.y + st.h/2 + next.h/2;
       lp.x = st.mesh.position.x; lp.z = st.mesh.position.z;
-    } else { lp.y = next.h / 2; }
+    } else { lp.y = next.h/2; }
 
     if (!insideTruck(lp, next)) { toast('❌ Caixa fora da caçamba!'); return; }
 
-    const m = mkBox(next);
-    m.position.copy(lp);
-    truckGrp.add(m);
+    const m = mkBox(next); m.position.copy(lp); truckGrp.add(m);
     boxes.push({ mesh: m, color: next.color, v: next.v, w: next.w, h: next.h, d: next.d });
     toast('✅ Caixa na caçamba!', 1500, true);
   }
-  // === MÓDULO CUBAGEM (A) ===
+  // === CUBAGEM ===
   else {
     const st = findTop(pos.x, pos.z, boxes);
     if (st) {
@@ -500,13 +338,11 @@ function placeBox() {
         toast('❌ ' + next.color.toUpperCase() + ' não empilha sobre ' + st.color.toUpperCase() + '!');
         return;
       }
-      pos.y = st.mesh.position.y + st.h / 2 + next.h / 2;
+      pos.y = st.mesh.position.y + st.h/2 + next.h/2;
       pos.x = st.mesh.position.x; pos.z = st.mesh.position.z;
-    } else { pos.y += next.h / 2; }
+    } else { pos.y += next.h/2; }
 
-    const m = mkBox(next);
-    m.position.copy(pos);
-    scene.add(m);
+    const m = mkBox(next); m.position.copy(pos); scene.add(m);
     boxes.push({ mesh: m, color: next.color, v: next.v, w: next.w, h: next.h, d: next.d });
     toast('✅ Caixa posicionada!', 1500, true);
   }
@@ -528,7 +364,7 @@ function resetAll() {
   boxes = [];
   truckPlaced = false;
   if (mode === 'picking') {
-    if (isSim) { truckGrp.position.set(0, 0, -4); truckPlaced = true; }
+    if (isSim) { truckGrp.position.set(0,0,-4); truckPlaced = true; }
     else { truckGrp.visible = false; }
   }
   next = genBox(); refreshPreview(); updHUD();
@@ -541,14 +377,19 @@ function toggleMode() {
   if (mode === 'picking') {
     if (isSim) {
       truckGrp.visible = true;
-      if (!truckPlaced) { truckGrp.position.set(0, 0, -4); truckPlaced = true; }
+      if (!truckPlaced) { truckGrp.position.set(0,0,-4); truckPlaced = true; }
       toast('🚛 Modo Picking — coloque caixas na caçamba!', 2500, true);
     } else {
       if (truckPlaced) {
         truckGrp.visible = true;
         toast('🚛 Modo Picking — caçamba ativa!', 2000, true);
       } else {
-        toast('🚛 Aponte para o chão e toque COLOCAR para posicionar a caçamba!', 3500, true);
+        // AR: posicionar caçamba automaticamente na frente
+        const arPos = getARPosition();
+        truckGrp.position.copy(arPos);
+        truckGrp.visible = true;
+        truckPlaced = true;
+        toast('🚛 Caçamba posicionada! Coloque caixas dentro.', 3000, true);
       }
     }
   } else {
@@ -558,7 +399,70 @@ function toggleMode() {
   updHUD();
 }
 
-// Botões
+// ================================================================
+//  SELEÇÃO (simulação)
+// ================================================================
+function selectBox(event) {
+  if (!isSim) return;
+  const mouse = new THREE.Vector2();
+  mouse.x = (event.clientX / innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / innerHeight) * 2 + 1;
+  const rc = new THREE.Raycaster();
+  rc.setFromCamera(mouse, camera);
+  const meshes = boxes.map(b => b.mesh);
+  const hits = rc.intersectObjects(meshes, false);
+  clearSelection();
+  if (hits.length > 0) {
+    const box = boxes.find(b => b.mesh === hits[0].object);
+    if (box) {
+      selectedBox = box;
+      const outGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(box.w+0.04, box.h+0.04, box.d+0.04));
+      selOutline = new THREE.LineSegments(outGeo, new THREE.LineBasicMaterial({ color: 0xffff00, linewidth: 2 }));
+      box.mesh.add(selOutline);
+      toast('📦 Selecionada! WASD mover, Q/E altura, ESC soltar', 2000, true);
+      updHUD();
+    }
+  }
+}
+
+function clearSelection() {
+  if (selOutline && selectedBox) {
+    selectedBox.mesh.remove(selOutline);
+    selOutline.geometry.dispose(); selOutline.material.dispose();
+    selOutline = null;
+  }
+  selectedBox = null;
+}
+
+function moveSelectedBox() {
+  if (!selectedBox) return;
+  const m = selectedBox.mesh;
+  let dx=0, dz=0, dy=0;
+  if (keysDown['KeyA']||keysDown['ArrowLeft']) dx -= moveSpeed;
+  if (keysDown['KeyD']||keysDown['ArrowRight']) dx += moveSpeed;
+  if (keysDown['KeyW']||keysDown['ArrowUp']) dz -= moveSpeed;
+  if (keysDown['KeyS']||keysDown['ArrowDown']) dz += moveSpeed;
+  if (keysDown['KeyQ']) dy += moveSpeed;
+  if (keysDown['KeyE']) dy -= moveSpeed;
+  if (dx||dz||dy) {
+    m.position.x += dx; m.position.y += dy; m.position.z += dz;
+    if (m.position.y < selectedBox.h/2) m.position.y = selectedBox.h/2;
+    if (mode === 'picking') {
+      const hw=TRUCK.w/2, hd=TRUCK.d/2;
+      m.position.x = Math.max(-hw+selectedBox.w/2, Math.min(hw-selectedBox.w/2, m.position.x));
+      m.position.z = Math.max(-hd+selectedBox.d/2, Math.min(hd-selectedBox.d/2, m.position.z));
+      if (m.position.y+selectedBox.h/2 > TRUCK.h) m.position.y = TRUCK.h-selectedBox.h/2;
+    }
+  }
+}
+
+window.addEventListener('keydown', e => { keysDown[e.code]=true; if(e.code==='Escape'){clearSelection();updHUD();} });
+window.addEventListener('keyup', e => { keysDown[e.code]=false; });
+window.addEventListener('pointerdown', e => {
+  if (e.target.closest('#hud')||e.target.closest('#overlay')||e.target.closest('#legend')) return;
+  selectBox(e);
+});
+
 $('btn-place').onclick = placeBox;
 $('btn-undo').onclick = undoBox;
 $('btn-reset').onclick = resetAll;
@@ -577,7 +481,7 @@ function enterHUD(sim) {
 }
 
 // ================================================================
-//  AR — WebXR com Hit Testing
+//  AR — WebXR robusto
 // ================================================================
 async function initAR() {
   if (!navigator.xr) { $('ar-status').textContent = '⚠️ WebXR indisponível.'; return; }
@@ -587,6 +491,8 @@ async function initAR() {
     { req: ['hit-test'], opt: ['local-floor'], ov: false },
     { req: ['hit-test'], opt: [], ov: false },
     { req: [], opt: ['hit-test', 'local-floor'], ov: false },
+    { req: [], opt: ['local-floor'], ov: false },
+    { req: [], opt: [], ov: false },
   ];
 
   let session = null;
@@ -595,19 +501,19 @@ async function initAR() {
       const opts = { requiredFeatures: c.req, optionalFeatures: c.opt };
       if (c.ov) opts.domOverlay = { root: document.body };
       session = await navigator.xr.requestSession('immersive-ar', opts);
-      console.log('AR session OK:', c);
+      console.log('AR session OK:', JSON.stringify(c));
       break;
-    } catch (e) { console.warn('AR config fail:', c, e.message); }
+    } catch (e) { console.warn('AR fail:', JSON.stringify(c), e.message); }
   }
 
   if (!session) {
-    $('ar-status').textContent = '❌ AR não suportado. Instale Google Play Services for AR.';
+    $('ar-status').textContent = '❌ AR não suportado.';
     return;
   }
 
   xrSession = session;
   session.addEventListener('end', () => {
-    xrSession = null; htSource = null;
+    xrSession = null; htSource = null; arRefSpace = null; lastHitPose = null;
     $('overlay').classList.remove('hidden');
     $('hud').classList.remove('active');
     $('crosshair').classList.remove('active');
@@ -615,24 +521,39 @@ async function initAR() {
     $('sim-badge').classList.remove('active');
   });
 
-  let refSpace;
-  try { refSpace = await session.requestReferenceSpace('local-floor'); }
-  catch { try { refSpace = await session.requestReferenceSpace('local'); } catch { refSpace = await session.requestReferenceSpace('viewer'); } }
+  // Reference space — tentar local-floor primeiro (tem y=0 no chão)
+  try { arRefSpace = await session.requestReferenceSpace('local-floor'); console.log('RefSpace: local-floor'); }
+  catch {
+    try { arRefSpace = await session.requestReferenceSpace('local'); console.log('RefSpace: local'); }
+    catch { arRefSpace = await session.requestReferenceSpace('viewer'); console.log('RefSpace: viewer'); }
+  }
 
   renderer.xr.setReferenceSpaceType('local');
   await renderer.xr.setSession(session);
 
+  // Hit-test source
   try {
     const vs = await session.requestReferenceSpace('viewer');
     htSource = await session.requestHitTestSource({ space: vs });
-  } catch (e) { console.warn('Hit-test source fail:', e); }
+    console.log('Hit-test source OK');
+  } catch (e) {
+    console.warn('Hit-test source FALHOU:', e.message);
+    htSource = null;
+  }
 
   enterHUD(false);
-  renderer.setAnimationLoop((t, f) => renderAR(t, f, refSpace));
+
+  // Se hit-test não disponível, informar e usar fallback
+  if (!htSource) {
+    toast('ℹ️ Hit-test indisponível. Caixas serão colocadas 2m à frente.', 4000, true);
+    reticleOk = true; // permitir colocar mesmo sem hit-test
+  }
+
+  renderer.setAnimationLoop((t, f) => renderAR(t, f));
 }
 
 // ================================================================
-//  SIMULAÇÃO DESKTOP
+//  SIM
 // ================================================================
 function initSim() {
   isSim = true;
@@ -642,19 +563,18 @@ function initSim() {
     new THREE.PlaneGeometry(40, 40),
     new THREE.MeshStandardMaterial({ color: 0x2d0a1e, roughness: 0.95 })
   );
-  simFloor.rotation.x = -Math.PI / 2; scene.add(simFloor);
+  simFloor.rotation.x = -Math.PI/2; scene.add(simFloor);
 
   const grid = new THREE.GridHelper(40, 60, 0xff2d87, 0x3a0f28);
   grid.position.y = 0.005; grid.material.transparent = true; grid.material.opacity = 0.3;
   scene.add(grid);
 
-  // Caçamba firme no chão y=0
   truckGrp.position.set(0, 0, -4);
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.target.set(0, 1.5, -2);
   controls.enableDamping = true; controls.dampingFactor = 0.08;
-  controls.maxPolarAngle = Math.PI / 2.05;
+  controls.maxPolarAngle = Math.PI/2.05;
   controls.minDistance = 2; controls.maxDistance = 35;
   controls.update();
 
@@ -667,53 +587,85 @@ function initSim() {
 // ================================================================
 //  RENDER AR
 // ================================================================
-function renderAR(time, frame, refSpace) {
+function renderAR(time, frame) {
   if (!frame) return;
+
+  lastHitPose = null;
+
   if (htSource) {
-    const hits = frame.getHitTestResults(htSource);
-    if (hits.length) {
-      const pose = hits[0].getPose(refSpace);
+    const results = frame.getHitTestResults(htSource);
+    if (results.length > 0) {
+      const pose = results[0].getPose(arRefSpace);
       if (pose) {
+        lastHitPose = pose;
         reticle.visible = true;
         reticle.matrix.fromArray(pose.transform.matrix);
         reticleOk = true;
-        const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
-        reticle.matrix.decompose(p, q, s);
+
+        const p = new THREE.Vector3();
+        p.setFromMatrixPosition(new THREE.Matrix4().fromArray(pose.transform.matrix));
+
         preview.visible = true;
-        preview.position.set(p.x, p.y + next.h / 2, p.z);
+        if (mode === 'picking' && truckPlaced) {
+          const lp = truckGrp.worldToLocal(p.clone());
+          lp.y = next.h/2;
+          preview.position.copy(truckGrp.localToWorld(lp.clone()));
+        } else {
+          preview.position.set(p.x, p.y + next.h/2, p.z);
+        }
         updatePreviewFeedback(preview.position);
       }
     } else {
-      reticle.visible = false; preview.visible = false; reticleOk = false;
+      reticle.visible = false;
+      preview.visible = false;
+      // Manter reticleOk = true se já detectou antes (para fallback)
+    }
+  } else {
+    // Sem hit-test — preview na frente da câmera
+    reticle.visible = false;
+    reticleOk = true; // permitir colocar
+    const cam = renderer.xr.getCamera();
+    if (cam.position.lengthSq() > 0) {
+      const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
+      const fp = cam.position.clone().add(dir.multiplyScalar(2));
+      fp.y = 0;
+      preview.visible = true;
+      preview.position.set(fp.x, next.h/2, fp.z);
+      updatePreviewFeedback(preview.position);
     }
   }
-  reticle.material.opacity = 0.6 + 0.25 * Math.sin(time * 0.003);
+
+  // Pulsar reticle
+  if (reticle.visible) {
+    reticle.material.opacity = 0.5 + 0.35 * Math.sin(time * 0.003);
+  }
+
   renderer.render(scene, camera);
 }
 
 // ================================================================
-//  RENDER SIMULAÇÃO — caixas estáticas, sem movimento automático
+//  RENDER SIM
 // ================================================================
 function renderSim() {
   controls.update();
   moveSelectedBox();
 
   const rc = new THREE.Raycaster();
-  rc.setFromCamera(new THREE.Vector2(0, 0), camera);
+  rc.setFromCamera(new THREE.Vector2(0,0), camera);
 
   if (mode === 'picking' && truckGrp.visible) {
     const h = rc.intersectObjects(truckGrp.children, true);
     if (h.length) {
       const lp = truckGrp.worldToLocal(h[0].point.clone());
       preview.visible = true;
-      preview.position.copy(truckGrp.localToWorld(new THREE.Vector3(lp.x, next.h / 2, lp.z)));
-      updatePreviewFeedback(new THREE.Vector3(lp.x, next.h / 2, lp.z));
+      preview.position.copy(truckGrp.localToWorld(new THREE.Vector3(lp.x, next.h/2, lp.z)));
+      updatePreviewFeedback(new THREE.Vector3(lp.x, next.h/2, lp.z));
     } else preview.visible = false;
   } else if (simFloor) {
     const h = rc.intersectObject(simFloor);
     if (h.length) {
       preview.visible = true;
-      preview.position.set(h[0].point.x, h[0].point.y + next.h / 2, h[0].point.z);
+      preview.position.set(h[0].point.x, h[0].point.y + next.h/2, h[0].point.z);
       updatePreviewFeedback(preview.position);
     } else preview.visible = false;
   }
