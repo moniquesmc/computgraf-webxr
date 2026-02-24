@@ -3,7 +3,6 @@
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Poppins',sans-serif;overflow:hidden;background:#1a0a12;color:#fff}
 
-/* OVERLAY */
 #overlay{
   position:fixed;top:0;left:0;width:100%;height:100%;
   display:flex;flex-direction:column;align-items:center;justify-content:center;
@@ -64,7 +63,6 @@ body{font-family:'Poppins',sans-serif;overflow:hidden;background:#1a0a12;color:#
 .feature-card .icon{font-size:1.6rem;margin-bottom:6px}
 .feature-card .label{font-size:.72rem;color:rgba(255,182,213,.8);font-weight:400;line-height:1.4}
 
-/* HUD */
 #hud{display:none;position:fixed;top:0;left:0;width:100%;z-index:50;pointer-events:none}
 #hud.active{display:block}
 #hud-top{display:flex;justify-content:space-between;align-items:flex-start;padding:14px 16px;gap:10px}
@@ -101,7 +99,6 @@ body{font-family:'Poppins',sans-serif;overflow:hidden;background:#1a0a12;color:#
 #btn-undo{background:linear-gradient(135deg,#a855f7,#c084fc);box-shadow:0 4px 20px rgba(168,85,247,.3)}
 #btn-reset{background:linear-gradient(135deg,#ec4899,#f472b6);box-shadow:0 4px 20px rgba(236,72,153,.3)}
 
-/* crosshair */
 #crosshair{
   display:none;position:fixed;top:50%;left:50%;width:36px;height:36px;
   margin-left:-18px;margin-top:-18px;border:2px solid rgba(255,105,180,.7);
@@ -112,7 +109,6 @@ body{font-family:'Poppins',sans-serif;overflow:hidden;background:#1a0a12;color:#
 #crosshair::after{width:10px;height:2px;top:50%;left:50%;transform:translate(-50%,-50%)}
 #crosshair.active{display:block}
 
-/* toast */
 #toast{
   position:fixed;bottom:95px;left:50%;transform:translateX(-50%) translateY(20px);
   padding:12px 28px;border-radius:50px;font-weight:700;font-size:.8rem;
@@ -124,7 +120,6 @@ body{font-family:'Poppins',sans-serif;overflow:hidden;background:#1a0a12;color:#
 #toast.error{background:linear-gradient(135deg,rgba(220,38,38,.92),rgba(185,28,28,.92));color:#fff;border:1px solid rgba(255,100,100,.3)}
 #toast.success{background:linear-gradient(135deg,rgba(255,45,135,.92),rgba(236,72,153,.88));color:#fff;border:1px solid rgba(255,150,200,.3)}
 
-/* legend */
 #legend{
   position:fixed;bottom:85px;right:14px;
   background:linear-gradient(135deg,rgba(45,10,30,.9),rgba(74,16,66,.8));
@@ -147,19 +142,3 @@ body{font-family:'Poppins',sans-serif;overflow:hidden;background:#1a0a12;color:#
   border:1px solid rgba(192,132,252,.3);font-family:'Poppins',sans-serif;letter-spacing:.5px;
 }
 #sim-badge.active{display:block}
-
-/* Seleção info bar */
-#sel-info{
-  display:none;position:fixed;top:50px;left:50%;transform:translateX(-50%);
-  background:linear-gradient(135deg,rgba(30,136,229,.85),rgba(25,118,210,.8));
-  color:#fff;font-size:.7rem;font-weight:600;padding:8px 22px;border-radius:50px;
-  z-index:56;backdrop-filter:blur(10px);
-  border:1px solid rgba(100,180,255,.3);font-family:'Poppins',sans-serif;
-  letter-spacing:.3px;white-space:nowrap;max-width:95vw;overflow:hidden;text-overflow:ellipsis;
-  box-shadow:0 4px 20px rgba(30,136,229,.3);
-  animation:sel-pulse 1.5s ease-in-out infinite;
-}
-@keyframes sel-pulse{
-  0%,100%{box-shadow:0 4px 20px rgba(30,136,229,.3)}
-  50%{box-shadow:0 6px 30px rgba(30,136,229,.5)}
-}
