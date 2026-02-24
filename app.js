@@ -19,8 +19,8 @@ let hitTimestamp = 0;
 const HIT_GRACE = 2000;
 
 /* ── AR ref spaces ── */
-let arRefSpace = null;   // para hit test getPose
-let viewerSpace = null;  // para hit test source
+let arRefSpace = null;
+let viewerSpace = null;
 
 /* ── Debug ── */
 let debugEl = null;
@@ -67,7 +67,7 @@ const groundPlane = new THREE.Mesh(
   new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide })
 );
 groundPlane.position.y = 0;
-groundPlane.visible = false;  // invisível mas raycaster detecta
+groundPlane.visible = false;
 scene.add(groundPlane);
 
 let preview = mkBox(next, true); preview.visible = false; scene.add(preview);
@@ -122,7 +122,7 @@ function buildTruck() {
   const fl = new THREE.Mesh(new THREE.BoxGeometry(tw, 0.01, td), wm());
   fl.material.opacity = 0.3; fl.material.color.set(0xff2d87); truckGrp.add(fl);
   const t = 0.01;
-  [[- tw/2, th/2, 0, t, th, td], [tw/2, th/2, 0, t, th, td], [0, th/2, -td/2, tw, th, t]].forEach(([x,y,z,w,h,d]) => {
+  [[-tw/2, th/2, 0, t, th, td], [tw/2, th/2, 0, t, th, td], [0, th/2, -td/2, tw, th, t]].forEach(([x,y,z,w,h,d]) => {
     const wall = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), wm());
     wall.position.set(x, y, z); truckGrp.add(wall);
   });
@@ -208,7 +208,6 @@ function getPos() {
     const dir = new THREE.Vector3(0, 0, -0.5).applyQuaternion(xrCam.quaternion).normalize();
     rc.set(xrCam.position, dir);
 
-    /* Plano em y=0 */
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const target = new THREE.Vector3();
     const hit = rc.ray.intersectPlane(plane, target);
@@ -216,7 +215,6 @@ function getPos() {
       return { ok: true, pos: target, fallback: true };
     }
 
-    /* Se câmera olha pra cima, coloca 1m à frente */
     const fwd = xrCam.position.clone().add(
       new THREE.Vector3(0, 0, -1).applyQuaternion(xrCam.quaternion)
     );
@@ -378,7 +376,6 @@ async function initAR() {
   renderer.setAnimationLoop((timestamp, frame) => {
     if (!frame) return;
 
-    /* Usar o reference space do renderer para consistência */
     const rs = renderer.xr.getReferenceSpace() || arRefSpace;
 
     let htResults = null;
@@ -416,7 +413,6 @@ async function initAR() {
           preview.visible = true;
           preview.position.set(p.x, p.y + next.h / 2, p.z);
 
-          /* Reticle verde = hit ativo */
           ring.material.color.setHex(0x00ff88);
           dot.material.color.setHex(0x00ff44);
         }
@@ -424,7 +420,6 @@ async function initAR() {
         hitActive = false;
 
         if (hitTimestamp > 0 && (performance.now() - hitTimestamp < HIT_GRACE)) {
-          /* Cache: manter reticle amarelo */
           reticle.visible = true;
           reticle.matrix.copy(hitMatrix);
           const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
@@ -444,12 +439,10 @@ async function initAR() {
       hitActive = false;
       reticle.visible = false;
 
-      /* Sem hit source — mostrar preview via fallback */
       const xrCam = renderer.xr.getCamera();
       if (xrCam) {
         const dir = new THREE.Vector3(0, 0, -1).applyQuaternion(xrCam.quaternion);
         const fwd = xrCam.position.clone().add(dir.multiplyScalar(0.7));
-        /* Tentar interceptar plano y=0 */
         const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
         const target = new THREE.Vector3();
         const ray = new THREE.Ray(xrCam.position, dir);
