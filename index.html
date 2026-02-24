@@ -23,14 +23,13 @@
       <p id="ar-status"></p>
     </div>
   </div>
-
   <div id="hud">
     <div id="hud-top">
       <div id="info-panel">
         <span id="hud-mode">Modo: <b>Cubagem</b></span>
         <span id="hud-count">Caixas: <b>0</b></span>
         <span id="hud-next">Próxima: <b>—</b></span>
-        <span id="hud-vol">Volume: <b>—</b></span>
+        <span id="hud-vol">Vol: <b>—</b></span>
       </div>
       <button id="mode-toggle">🔄 Cubagem</button>
     </div>
@@ -40,24 +39,20 @@
       <button class="hud-btn" id="btn-reset">✨ Resetar</button>
     </div>
   </div>
-
   <div id="crosshair"></div>
   <div id="toast"></div>
   <div id="sim-badge">🖥️ MODO SIMULAÇÃO</div>
-
   <div id="legend">
     <div class="legend-title">📊 Cores por Volume</div>
-    <div class="legend-item"><span class="legend-color" style="background:#e53935"></span> Vermelha (V &gt; 32.000 cm³)</div>
-    <div class="legend-item"><span class="legend-color" style="background:#43a047"></span> Verde (12.000 &lt; V ≤ 32.000 cm³)</div>
-    <div class="legend-item"><span class="legend-color" style="background:#1e88e5"></span> Azul (V ≤ 12.000 cm³)</div>
+    <div class="legend-item"><span class="legend-color" style="background:#e53935"></span> Vermelha (V &gt; 12000cm³)</div>
+    <div class="legend-item"><span class="legend-color" style="background:#43a047"></span> Verde (4000 &lt; V ≤ 12000)</div>
+    <div class="legend-item"><span class="legend-color" style="background:#1e88e5"></span> Azul (V ≤ 4000cm³)</div>
     <div class="legend-divider">
-      <div class="legend-rule">✅ Mesma cor sobre mesma cor</div>
-      <div class="legend-rule">✅ Azul sobre Verde / Vermelha</div>
-      <div class="legend-rule">✅ Verde sobre Vermelha</div>
-      <div class="legend-rule">❌ Demais combinações bloqueadas</div>
+      <div class="legend-rule">✅ Mesma cor OK</div>
+      <div class="legend-rule">✅ Azul → Verde/Vermelha</div>
+      <div class="legend-rule">✅ Verde → Vermelha</div>
     </div>
   </div>
-
   <script type="importmap">
   {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"}}
   </script>
